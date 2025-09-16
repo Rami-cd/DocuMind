@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Chat Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.24.0/axios.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --accent-color: #667eea;
+            --text-primary: #2c3e50;
+            --text-secondary: #5a6c7d;
+            --surface-glass: rgba(255, 255, 255, 0.15);
+            --surface-glass-hover: rgba(255, 255, 255, 0.25);
+            --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.1);
+            --shadow-floating: 0 8px 40px rgba(102, 126, 234, 0.15);
+            --border-radius: 24px;
+            --border-radius-small: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: 
+                linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%),
+                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="%23667eea" opacity="0.03"/><circle cx="75" cy="75" r="1" fill="%23764ba2" opacity="0.03"/><circle cx="50" cy="10" r="1" fill="%23667eea" opacity="0.02"/><circle cx="10" cy="60" r="1" fill="%23764ba2" opacity="0.02"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 32px;
+            position: relative;
+        }
+
+        /* Background overlay for custom images */
+        .bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            z-index: -2;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+        }
+
+        .bg-overlay.active {
+            opacity: 0.3;
+        }
+
+        /* Floating background elements */
+        .bg-element {
+            position: fixed;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            opacity: 0.05;
+            animation: float 20s ease-in-out infinite;
+            z-index: -1;
+        }
+
+        .bg-element:nth-child(1) { width: 300px; height: 300px; top: 10%; left: -5%; animation-delay: 0s; }
+        .bg-element:nth-child(2) { width: 200px; height: 200px; top: 60%; right: -5%; animation-delay: -7s; }
+        .bg-element:nth-child(3) { width: 150px; height: 150px; bottom: 20%; left: 20%; animation-delay: -14s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-30px) rotate(120deg); }
+            66% { transform: translateY(30px) rotate(240deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: minmax(400px, 1fr) 2fr;
+            gap: 32px;
+            min-height: calc(100vh - 64px);
+        }
+
+        .sidebar {
+            background: var(--surface-glass);
+            backdrop-filter: blur(20px);
+            border-radius: var(--border-radius);
+            padding: 40px 32px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        }
+
+        .chat-area {
+            background: var(--surface-glass);
+            backdrop-filter: blur(20px);
+            border-radius: var(--border-radius);
+            padding: 40px 32px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chat-area::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        }
+
+        h1 {
+            font-family: 'Crimson Text', serif;
+            color: var(--text-primary);
+            margin-bottom: 40px;
+            font-size: clamp(2.5rem, 4vw, 3.5rem);
+            text-align: center;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 2px;
+            background: var(--primary-gradient);
+            border-radius: 1px;
+        }
+
+        h2 {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(102, 126, 234, 0.3);
+            border-radius: var(--border-radius-small);
+            padding: 48px 24px;
+            text-align: center;
+            margin-bottom: 24px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            transition: all 0.4s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .upload-area:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .upload-area:hover {
+            border-color: rgba(102, 126, 234, 0.6);
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .upload-area.dragover {
+            border-color: rgba(118, 75, 162, 0.8);
+            background: rgba(118, 75, 162, 0.1);
+            transform: scale(1.02);
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-icon {
+            font-size: 3.5rem;
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .upload-text {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 400;
+            line-height: 1.5;
+            position: relative;
+            z-index: 1;
+        }
+
+        .file-list {
+            margin: 24px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .file-item {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 16px 20px;
+            border-radius: var(--border-radius-small);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateX(4px);
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .btn {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.01em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-floating);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            padding: 16px 24px;
+            margin: 16px 0;
+            border-radius: var(--border-radius-small);
+            text-align: center;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .status.processing {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(255, 152, 0, 0.15) 100%);
+            color: #b8860b;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .status.completed {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(34, 139, 34, 0.15) 100%);
+            color: #2d5a2d;
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .status.error {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(176, 42, 55, 0.15) 100%);
+            color: #8b2635;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 24px;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--border-radius-small);
+            max-height: 500px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 3px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 16px 24px;
+            border-radius: 24px;
+            max-width: 85%;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            position: relative;
+            animation: messageSlide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: var(--primary-gradient);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 8px;
+        }
+
+        .message.bot {
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-bottom-left-radius: 8px;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 16px 24px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            font-size: 1rem;
+            outline: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .chat-input input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .chat-input input:focus {
+            border-color: rgba(102, 126, 234, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-top: 2px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .health-status {
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            border-radius: var(--border-radius-small);
+            text-align: center;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .health-status.healthy {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(34, 139, 34, 0.15) 100%);
+            color: #2d5a2d;
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .health-status.unhealthy {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(176, 42, 55, 0.15) 100%);
+            color: #8b2635;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .footer-credit {
+            margin-top: auto;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .footer-credit .author {
+            font-weight: 600;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Background image controls */
+        .bg-controls {
+            position: fixed;
+            top: 32px;
+            right: 32px;
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .bg-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: var(--surface-glass);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+        }
+
+        .bg-btn:hover {
+            background: var(--surface-glass-hover);
+            transform: scale(1.1);
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+                gap: 24px;
+                min-height: auto;
+            }
+            
+            body {
+                padding: 16px;
+            }
+            
+            .sidebar, .chat-area {
+                padding: 24px 20px;
+            }
+
+            .bg-controls {
+                top: 16px;
+                right: 16px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .upload-area {
+                padding: 32px 16px;
+            }
+            
+            .chat-messages {
+                max-height: 300px;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Floating background elements -->
+    <div class="bg-element"></div>
+    <div class="bg-element"></div>
+    <div class="bg-element"></div>
+
+    <!-- Background overlay for custom images -->
+    <div class="bg-overlay" id="bgOverlay"></div>
+
+    <!-- Background controls -->
+    <div class="bg-controls">
+        <div class="bg-btn" onclick="setBgImage('nature')" title="Nature Background">🌿</div>
+        <div class="bg-btn" onclick="setBgImage('abstract')" title="Abstract Background">✨</div>
+        <div class="bg-btn" onclick="setBgImage('minimal')" title="Minimal Background">⚪</div>
+        <div class="bg-btn" onclick="clearBgImage()" title="Default Background">🚫</div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <h2>Upload Documents</h2>
+            
+            <!-- <div id="healthStatus" class="health-status">
+                <div class="spinner"></div>Checking system status...
+            </div> -->
+            
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">
+                    Click to upload PDFs or drag & drop here<br>
+                    <small style="opacity: 0.7;">Supports multiple PDF files</small>
+                </div>
+            </div>
+            
+            <input type="file" id="fileInput" multiple accept=".pdf">
+            
+            <div id="fileList" class="file-list"></div>
+            
+            <button id="uploadBtn" class="btn" disabled>
+                Process Documents
+            </button>
+            
+            <div id="uploadStatus"></div>
+            
+            <div class="footer-credit">
+                <div>Powered by Free LLMs</div>
+                <div>Crafted with care by <span class="author">Rami Sheikh</span></div>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <h1>PDF Chat Assistant</h1>
+            
+            <div id="chatMessages" class="chat-messages">
+                <div class="message bot">
+                    Welcome! Upload your PDF documents and I'll help you discover insights from their content. Let's begin this journey of knowledge together.
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <input 
+                    type="text" 
+                    id="questionInput" 
+                    placeholder="What would you like to know about your documents?"
+                    disabled
+                >
+                <button id="sendBtn" class="btn" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let sessionId = null;
+        let selectedFiles = [];
+        const API_BASE = 'http://localhost:8000';
+        
+        // Background images
+        const backgroundImages = {
+            nature: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80',
+            abstract: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80',
+            minimal: 'https://images.unsplash.com/photo-1497215842964-222b430dc094?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80'
+        };
+
+        function setBgImage(type) {
+            const overlay = document.getElementById('bgOverlay');
+            if (backgroundImages[type]) {
+                overlay.style.backgroundImage = `url('${backgroundImages[type]}')`;
+                overlay.classList.add('active');
+            }
+        }
+
+        function clearBgImage() {
+            const overlay = document.getElementById('bgOverlay');
+            overlay.classList.remove('active');
+        }
+        
+        // DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+        const fileList = document.getElementById('fileList');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const chatMessages = document.getElementById('chatMessages');
+        const questionInput = document.getElementById('questionInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const healthStatus = document.getElementById('healthStatus');
+        
+        // Check health status
+        async function checkHealth() {
+            try {
+                const response = await axios.get(`${API_BASE}/health`);
+                const health = response.data;
+                
+                healthStatus.className = health.ollama_available ? 'health-status healthy' : 'health-status unhealthy';
+                healthStatus.innerHTML = health.ollama_available 
+                    ? 'System Ready - Ollama Connected'
+                    : 'Ollama Not Available - Please start Ollama';
+            } catch (error) {
+                healthStatus.className = 'health-status unhealthy';
+                healthStatus.innerHTML = 'API Not Available';
+            }
+        }
+        
+        // File handling
+        fileInput.addEventListener('change', handleFiles);
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            handleFiles({ target: { files } });
+        });
+        
+        function handleFiles(event) {
+            const files = Array.from(event.target.files);
+            const pdfFiles = files.filter(file => file.type === 'application/pdf');
+            
+            if (pdfFiles.length !== files.length) {
+                addMessage('bot', 'Only PDF files are accepted. Some files were filtered out.');
+            }
+            
+            selectedFiles = pdfFiles;
+            displayFileList();
+            uploadBtn.disabled = selectedFiles.length === 0;
+        }
+        
+        function displayFileList() {
+            fileList.innerHTML = '';
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span class="file-name">${file.name}</span>
+                    <button onclick="removeFile(${index})" style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">×</button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        }
+        
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            displayFileList();
+            uploadBtn.disabled = selectedFiles.length === 0;
+        }
+        
+        // Upload and process files
+        uploadBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+            
+            uploadBtn.disabled = true;
+            uploadStatus.innerHTML = '<div class="status processing"><div class="spinner"></div>Uploading and processing documents...</div>';
+            
+            try {
+                const response = await axios.post(`${API_BASE}/upload`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                sessionId = response.data.session_id;
+                addMessage('bot', `Processing ${selectedFiles.length} PDF files. This may take a moment...`);
+                
+                // Poll for status
+                pollProcessingStatus();
+                
+            } catch (error) {
+                uploadStatus.innerHTML = '<div class="status error">Upload failed. Please try again.</div>';
+                uploadBtn.disabled = false;
+                addMessage('bot', 'I encountered an issue uploading your files. Please try again.');
+            }
+        });
+        
+        async function pollProcessingStatus() {
+            const maxAttempts = 30; // 30 seconds max
+            let attempts = 0;
+            
+            const poll = async () => {
+                try {
+                    const response = await axios.get(`${API_BASE}/status/${sessionId}`);
+                    const status = response.data.status;
+                    
+                    if (status === 'completed') {
+                        uploadStatus.innerHTML = '<div class="status completed">Documents processed successfully!</div>';
+                        questionInput.disabled = false;
+                        sendBtn.disabled = false;
+                        addMessage('bot', 'Excellent! Your documents are ready. Feel free to ask me anything about their content.');
+                        return;
+                    } else if (status.startsWith('failed')) {
+                        uploadStatus.innerHTML = '<div class="status error">Processing failed</div>';
+                        uploadBtn.disabled = false;
+                        addMessage('bot', 'Processing encountered an issue. Please verify your PDFs and try again.');
+                        return;
+                    } else if (attempts < maxAttempts) {
+                        attempts++;
+                        setTimeout(poll, 1000);
+                    } else {
+                        uploadStatus.innerHTML = '<div class="status error">Processing timeout</div>';
+                        uploadBtn.disabled = false;
+                        addMessage('bot', 'Processing is taking longer than expected. Please try again.');
+                    }
+                } catch (error) {
+                    uploadStatus.innerHTML = '<div class="status error">Status check failed</div>';
+                    uploadBtn.disabled = false;
+                }
+            };
+            
+            poll();
+        }
+        
+        // Chat functionality
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        async function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question || !sessionId) return;
+            
+            addMessage('user', question);
+            questionInput.value = '';
+            
+            // Show typing indicator
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message bot';
+            typingDiv.innerHTML = '<div class="spinner"></div>Analyzing your documents...';
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            try {
+                const response = await axios.post(`${API_BASE}/ask`, {
+                    question: question,
+                    session_id: sessionId
+                });
+                
+                // Remove typing indicator
+                chatMessages.removeChild(typingDiv);
+                
+                addMessage('bot', response.data.answer);
+                
+            } catch (error) {
+                // Remove typing indicator
+                chatMessages.removeChild(typingDiv);
+                
+                let errorMessage = 'I apologize, but I encountered an error processing your question.';
+                if (error.response && error.response.data && error.response.data.detail) {
+                    errorMessage = error.response.data.detail;
+                }
+                addMessage('bot', errorMessage);
+            }
+        }
+        
+        sendBtn.addEventListener('click', sendQuestion);
+        
+        questionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendQuestion();
+            }
+        });
+        
+        // Initialize
+        checkHealth();
+        setInterval(checkHealth, 30000); // Check health every 30 seconds
+    </script>
+</body>
+</html>

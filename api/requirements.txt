@@ -1,0 +1,7 @@
+streamlit
+langchain
+langchain-community
+PyPDF2
+faiss-cpu
+requests
+httpx
