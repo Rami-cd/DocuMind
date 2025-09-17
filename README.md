@@ -1,4 +1,6 @@
-# PDF Chat Assistant
+# The application is down for maintenance while upgrading to a newer, improved LLM model.
+
+# DocuMind
 
 AI-powered document Q&A system using free, local LLMs with modern web interface.
 
